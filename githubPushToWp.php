@@ -1,8 +1,8 @@
 <?php
 
 class ConfluenceToWordPress {
-    private $confluenceApiToken = '111'; // Ensure this token is used in all API calls
-    private $wpAuthToken = '222=';
+    private $confluenceApiToken = '111'; // Ensure this token is used in all Confluence API calls
+    private $wpAuthToken = '222='; // Ensure this token is used in all WordPress API calls
     private $wpBaseUrl = 'https://portal.333com/wp-json/wp/v2';
     private $cfPropUrlTemplate = 'https://444.com/tap-confluence/rest/api/content/%s/property';
     private $fetchContentUrlTemplate = 'https://444.com/tap-confluence/rest/api/content/%s?expand=body.view,metadata.properties,version';
@@ -10,35 +10,35 @@ class ConfluenceToWordPress {
 
     public function postToWordPress($pageId) {
         try {
-            // Fetch Confluence page content
+            // Step 1: Fetch Confluence page content
             $contentData = $this->fetchConfluencePageContent($pageId);
             $pageContent = $this->extractPanelContent($contentData['body']['view']['value']);
 
-            // Fetch additional metadata
+            // Step 2: Fetch additional metadata (title, author details)
             $additionalMetadata = $this->fetchAdditionalMetadata($pageId);
             $title = $additionalMetadata['title'] ?? 'No Title';
             $authorName = $additionalMetadata['author']['fullName'] ?? 'Unknown Author';
             $authorEmail = $additionalMetadata['author']['email'] ?? 'no-reply@example.com';
 
-            // Ensure author exists in WordPress
+            // Step 3: Ensure author exists in WordPress
             $authorId = $this->ensureAuthorExists($authorName, $authorEmail);
 
-            // Fetch metadata properties
+            // Step 4: Fetch metadata properties for WordPress integration
             $metadataProperties = $this->fetchMetadataProperties($pageId);
             $wpPageId = $metadataProperties['wordpress']['wpPageId'] ?? null;
 
-            // Process images and clean content
+            // Step 5: Process images and clean content
             $wpImageData = $this->processImages($pageContent, $metadataProperties['wordpress']['wpImageId'] ?? []);
             $cleanedContent = $this->cleanContent($pageContent, $wpImageData);
 
-            // Create or update the WordPress page
+            // Step 6: Create or update WordPress page
             if ($wpPageId) {
                 $this->updateWordPressPage($wpPageId, $cleanedContent);
             } else {
                 $wpPageId = $this->createWordPressPage($cleanedContent, $title, $authorId);
             }
 
-            // Update Confluence metadata
+            // Step 7: Update Confluence metadata with WordPress details
             $this->updateConfluenceMetadata($pageId, $wpPageId, $wpImageData);
 
             return "Page successfully posted to WordPress.";
@@ -50,17 +50,17 @@ class ConfluenceToWordPress {
 
     private function fetchConfluencePageContent($pageId) {
         $url = sprintf($this->fetchContentUrlTemplate, $pageId);
-        return $this->makeApiRequest($url, 'GET');
+        return $this->makeApiRequest($url, 'GET', [], true);
     }
 
     private function fetchMetadataProperties($pageId) {
         $url = sprintf($this->cfPropUrlTemplate, $pageId);
-        return $this->makeApiRequest($url, 'GET');
+        return $this->makeApiRequest($url, 'GET', [], true);
     }
 
     private function fetchAdditionalMetadata($pageId) {
         $url = sprintf($this->fetchMetadataUrlTemplate, $pageId);
-        return $this->makeApiRequest($url, 'GET');
+        return $this->makeApiRequest($url, 'GET', [], true);
     }
 
     private function extractPanelContent($content) {
@@ -69,7 +69,7 @@ class ConfluenceToWordPress {
     }
 
     private function processImages($html, $existingImages) {
-        // Logic to process and upload images (similar to JavaScript functionality)
+        // Logic to process and upload images to WordPress (similar to JavaScript functionality)
         // Returns an updated array of image metadata for WordPress.
         return $existingImages;
     }
@@ -99,18 +99,18 @@ class ConfluenceToWordPress {
             'status' => 'publish',
             'author' => $authorId
         ];
-        return $this->makeApiRequest($url, 'POST', $data)['id'];
+        return $this->makeApiRequest($url, 'POST', $data, false)['id'];
     }
 
     private function updateWordPressPage($pageId, $content) {
         $url = $this->wpBaseUrl . "/pages/$pageId";
         $data = ['content' => $content, 'status' => 'publish'];
-        $this->makeApiRequest($url, 'PUT', $data);
+        $this->makeApiRequest($url, 'PUT', $data, false);
     }
 
     private function ensureAuthorExists($name, $email) {
         $url = $this->wpBaseUrl . "/users?search=$email";
-        $response = $this->makeApiRequest($url, 'GET');
+        $response = $this->makeApiRequest($url, 'GET', [], false);
         if (!empty($response)) {
             return $response[0]['id']; // Author exists
         }
@@ -121,7 +121,7 @@ class ConfluenceToWordPress {
             'email' => $email,
             'password' => bin2hex(random_bytes(8))
         ];
-        return $this->makeApiRequest($url, 'POST', $data)['id'];
+        return $this->makeApiRequest($url, 'POST', $data, false)['id'];
     }
 
     private function updateConfluenceMetadata($pageId, $wpPageId, $wpImageData) {
@@ -133,17 +133,22 @@ class ConfluenceToWordPress {
                 'wpImageId' => $wpImageData
             ]
         ];
-        $this->makeApiRequest($url, 'PUT', $data);
+        $this->makeApiRequest($url, 'PUT', $data, true);
     }
 
-    private function makeApiRequest($url, $method, $data = null) {
+    private function makeApiRequest($url, $method, $data = null, $isConfluence = false) {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $this->confluenceApiToken, // Use Confluence API Token
+        $headers = [
             'Content-Type: application/json'
-        ]);
+        ];
+        if ($isConfluence) {
+            $headers[] = 'Authorization: Bearer ' . $this->confluenceApiToken;
+        } else {
+            $headers[] = 'Authorization: Basic ' . $this->wpAuthToken;
+        }
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         if ($data) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
         }
@@ -155,5 +160,4 @@ class ConfluenceToWordPress {
         return json_decode($response, true);
     }
 }
-
 ?>
