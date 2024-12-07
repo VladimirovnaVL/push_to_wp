@@ -1,8 +1,7 @@
-
 <?php
 
 class ConfluenceToWordPress {
-    private $confluenceApiToken = '111';
+    private $confluenceApiToken = '111'; // Ensure this token is used in all API calls
     private $wpAuthToken = '222=';
     private $wpBaseUrl = 'https://portal.333com/wp-json/wp/v2';
     private $cfPropUrlTemplate = 'https://444.com/tap-confluence/rest/api/content/%s/property';
@@ -142,7 +141,7 @@ class ConfluenceToWordPress {
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Basic ' . $this->wpAuthToken,
+            'Authorization: Bearer ' . $this->confluenceApiToken, // Use Confluence API Token
             'Content-Type: application/json'
         ]);
         if ($data) {
@@ -156,4 +155,5 @@ class ConfluenceToWordPress {
         return json_decode($response, true);
     }
 }
+
 ?>
