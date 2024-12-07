@@ -68,10 +68,27 @@ class ConfluenceToWordPress {
         return $matches[1] ?? $content;
     }
 
-    private function processImages($html, $existingImages) {
-        // Logic to process and upload images to WordPress (similar to JavaScript functionality)
-        // Returns an updated array of image metadata for WordPress.
-        return $existingImages;
+    private function processImages($htmlContent, $existingWpImageIds) {
+        $doc = new DOMDocument();
+        @$doc->loadHTML($htmlContent);
+        $images = $doc->getElementsByTagName('img');
+        $wpImageIds = $existingWpImageIds;
+
+        foreach ($images as $img) {
+            $imageName = $img->getAttribute('data-linked-resource-default-alias');
+            if (isset($existingWpImageIds[$imageName])) {
+                continue; // Skip if already pushed
+            }
+
+            $imageUrl = $img->getAttribute('src');
+            $uploadResponse = $this->uploadImageToWordPress($imageUrl, $imageName);
+            $wpImageIds[$imageName] = [
+                'id' => $uploadResponse['id'],
+                'url' => $uploadResponse['source_url']
+            ];
+        }
+
+        return ['wpImageIds' => $wpImageIds];
     }
 
     private function cleanContent($content, $wpImageData) {
@@ -79,7 +96,7 @@ class ConfluenceToWordPress {
         $content = preg_replace('/<style.*?<\/style>/s', '', $content);
         $content = preg_replace('/<div class="conf-macro.*?<\/div>/s', '', $content);
         $content = preg_replace('/<table(.*?)>/s', '<div class="table"><table>', $content);
-        $content = preg_replace('/<\/table>/s', '</table></div>', $content);
+        $content = str_replace('/<\/table>/s', '</table></div>', $content);
         // Handle image replacement
         foreach ($wpImageData as $alias => $data) {
             $content = str_replace(
@@ -160,4 +177,4 @@ class ConfluenceToWordPress {
         return json_decode($response, true);
     }
 }
-?>
+
